@@ -1,0 +1,33 @@
+name: Generate Provenance for Config (shared workflow)
+
+on:
+  workflow_dispatch:
+    inputs:
+      config-path:
+        description: 'Path to the config file to generate provenance for'
+        required: true
+        default: 'examples/sample-config/azure-terraform/active-directory/secure.tf'
+      artifact-name:
+        description: 'Name of the artifact to upload'
+        required: true
+        default: 'config'
+
+jobs:
+  upload-artifact:
+    runs-on: ubuntu-latest
+    steps:  
+    - uses: actions/checkout@v4
+
+    - uses: actions/upload-artifact@v4
+      with:
+        if-no-files-found: error
+        name: ${{ github.event.inputs.artifact-name }}
+        path: ${{ github.event.inputs.config-path }}
+
+  attest-artifact:
+    needs: upload-artifact
+    uses: github/artifact-attestations-workflows/.github/workflows/attest.yml@main
+    with:
+      artifact: ${{ github.event.inputs.artifact-name }}
+
+

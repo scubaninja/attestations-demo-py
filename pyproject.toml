@@ -1,0 +1,12 @@
+[project]
+name = "github-provenance-demo"
+dynamic = ["version"]
+description = "Showing build provenance with Python packages"
+readme = "README.md"
+
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptool.dynamic]
+version = {attr = "github-provenance-demo.__version__"}
