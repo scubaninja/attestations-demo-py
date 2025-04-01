@@ -1,0 +1,38 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  annotations:
+    pod-policies.kyverno.io/autogen-controllers: none
+  name: sigstore-attestation-verification
+spec:
+  background: false
+  validationFailureAction: Enforce
+  webhookTimeoutSeconds: 30
+  rules:
+  - match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    name: sigstore-attestation-verification
+    verifyImages:
+    - imageReferences:
+      - "*"
+      type: SigstoreBundle
+      attestations:
+      - attestors:
+        - entries:
+          - keyless:
+              issuerRegExp: https://token\.actions\.githubusercontent.+
+              subjectRegExp: https://github\.com/.+
+              rekor:
+                url: https://rekor.sigstore.dev
+        conditions:
+        - all:
+          - key: "{{ buildDefinition.externalParameters.workflow.repository }}"
+            operator: Equals
+            value: "https://github.com/tinaheidinger/test-container"
+          - key: '{{ buildDefinition.buildType }}'
+            operator: Equals
+            value: https://actions.github.io/buildtypes/workflow/v1
+        type: https://slsa.dev/provenance/v1
