@@ -1,0 +1,22 @@
+# Configuration for automatic PR labeling
+# Labels are applied based on the files changed in the PR
+
+# Documentation changes
+documentation:
+  - '**/*.md'        # Any Markdown file
+  - 'docs/**/*'      # Anything in the docs directory
+
+# Test file changes
+tests:
+  - 'tests/**/*'     # Files in the tests directory
+  - '**/*_test.py'   # Files ending with _test.py
+  - '**/*test*.py'   # Files containing 'test' in the name
+
+# Dependency changes
+dependencies:
+  - 'requirements.txt'   # Python package requirements
+  - 'setup.py'          # Package setup file
+
+# CI/CD changes
+ci:
+  - '.github/**/*'    # Any GitHub Actions or configuration files

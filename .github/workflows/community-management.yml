@@ -1,0 +1,54 @@
+# Workflow for automating community management tasks
+# Handles issue/PR labeling, welcomes new contributors, and manages stale items
+
+name: Community Management
+
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  schedule:
+    - cron: '0 0 * * *'  # Run daily
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+    # Automatically label new PRs based on changed files
+    - uses: actions/labeler@v4
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        configuration-path: .github/labeler.yml
+
+    # Send welcome messages to first-time contributors
+    - uses: actions/first-interaction@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        issue-message: "Thanks for opening your first issue! Someone from the team will respond soon."
+        pr-message: "Thanks for your first PR! We'll review it as soon as possible."
+
+    # Mark and close stale issues and PRs
+    - uses: actions/stale@v8
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        stale-issue-message: 'This issue has been marked as stale due to 60 days of inactivity.'
+        stale-pr-message: 'This PR has been marked as stale due to 60 days of inactivity.'
+        days-before-stale: 60
+        days-before-close: 7
+        stale-issue-label: 'stale'
+        stale-pr-label: 'stale'
+
+    # Add size labels to PRs based on the number of changes
+    - uses: codelytv/pr-size-labeler@v1
+      with:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        xs_label: 'size/xs'   # Very small changes (0-10 lines)
+        xs_max_size: '10'
+        s_label: 'size/s'     # Small changes (11-100 lines)
+        s_max_size: '100'
+        m_label: 'size/m'     # Medium changes (101-500 lines)
+        m_max_size: '500'
+        l_label: 'size/l'     # Large changes (501-1000 lines)
+        l_max_size: '1000'
+        xl_label: 'size/xl'   # Very large changes (1000+ lines)
