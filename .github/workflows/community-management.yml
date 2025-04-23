@@ -8,8 +8,8 @@ on:
     types: [opened, reopened]
   pull_request_target:
     types: [opened, reopened, synchronize]
-  schedule:
-    - cron: '0 0 * * *'  # Run daily
+ ## schedule:
+ ##   - cron: '0 0 * * *'  # Run daily
 
 jobs:
   triage:
