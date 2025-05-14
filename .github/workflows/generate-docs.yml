@@ -2,6 +2,8 @@
 # Triggers on pushes to main and merged pull requests
 
 name: Generate Documentation
+permissions:
+  contents: write
 
 on:
   push:
