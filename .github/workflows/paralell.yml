@@ -3,26 +3,28 @@ name: Parallel Jobs Workflow
 on: [push]
 
 jobs:
-  job1:
+  FrontEnd:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Run Job 1
-        run: echo "Executing Job 1"
+      - name: Front End Build
+        run: echo "Building Front End"
+      
 
-  job2:
+  BackEnd:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Run Job 2
-        run: echo "Executing Job 2"
-
-  job3:
+      - name: Back End Build
+        run: echo "Building Back End"
+        
+  IaC:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Run Job 3
-        run: echo "Executing Job 3"
+      - name: IaC Build 
+        run: echo "Building IaC"
+        
