@@ -1,0 +1,26 @@
+bug:
+  - '(bug|fix|error|crash|issue):'
+  - '\[bug\]'
+
+enhancement:
+  - '(feat|feature|enhancement|request):'
+  - '\[feature\]'
+
+documentation:
+  - '(doc|docs|documentation):'
+  - '\[docs\]'
+
+dependencies:
+  - '(dep|deps|dependencies):'
+  - 'requirements.txt'
+  - 'setup.py'
+
+question:
+  - '\?$'
+  - 'how to'
+  - 'help needed'
+
+security:
+  - 'security'
+  - 'vulnerability'
+  - 'CVE-'
