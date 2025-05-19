@@ -34,5 +34,3 @@ jobs:
     uses: github/artifact-attestations-workflows/.github/workflows/attest.yml@main
     with:
       artifact: ${{ github.event.inputs.artifact-name }}
-
-
