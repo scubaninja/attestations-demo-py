@@ -50,15 +50,6 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/test-container:latest
         id: docker_build
 
-      - name: Extract digest
-        run: |
-          digest=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/${{ github.repository_owner }}/test-container:latest)
-          if [ -z "$digest" ]; then
-           echo "Failed to retrieve the image digest."
-           exit 1
-          fi
-          echo "digest=$digest" >> $GITHUB_ENV
-
   GenerateAttestation:
     name: Generate Attestation
     runs-on: ubuntu-latest
