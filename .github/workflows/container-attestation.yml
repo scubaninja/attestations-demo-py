@@ -56,21 +56,11 @@ jobs:
     needs: build
     steps:
       - name: Generate artifact attestation
-        uses: sigstore/cosign-installer@v3
+        uses: actions/attest-build-provenance@v2
         with:
-          cosign-version: '1.13.1'
-
-      - name: Create predicate file
-        run: |
-          echo '{ "buildType": "custom", "description": "Container attestation for test-container" }' > ./predicate.json
-
-      - name: Generate attestation
-        run: |
-         cosign attest \
-             --key ${{ secrets.SIGNING_KEY }} \
-             --predicate ./predicate.json \
-             --type custom \
-             ghcr.io/${{ github.repository_owner }}/test-container:latest
+          subject-name: ghcr.io/${{ github.repository_owner }}/test-container
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
 
       - name: Upload attestation
         uses: actions/upload-artifact@v4
