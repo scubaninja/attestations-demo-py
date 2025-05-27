@@ -1,4 +1,4 @@
-name: Generate Provenance for Config (shared workflow)
+name: Generate Provenance 
 
 on:
   workflow_dispatch:
