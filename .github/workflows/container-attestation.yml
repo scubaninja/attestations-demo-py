@@ -81,6 +81,17 @@ jobs:
           name: attestation
           path: ./attestation.json
 
-      - name: Adding markdown
-        run: echo '### Your Build Report🚀' >> $GITHUB_STEP_SUMMARY
+  OutputSummary:
+    name: Output Summary
+    runs-on: ubuntu-latest
+    needs: GenerateAttestation
+    steps:
+      - name: Output build summary
+        run: |
+          echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Container Image: ghcr.io/${{ github.repository_owner }}/test-container:latest" >> $GITHUB_STEP_SUMMARY
+          echo "Image Digest: ${{ env.digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "Attestation Artifact: attestation.json" >> $GITHUB_STEP_SUMMARY
+
+      
 
