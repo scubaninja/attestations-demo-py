@@ -10,12 +10,13 @@ jobs:
   triage:
     runs-on: ubuntu-latest
     steps:
-      - uses: github/issue-labeler@v3
+      # Automatically label issues and PRs based on configuration
+      - uses: actions/labeler@v4
         with:
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
           configuration-path: .github/issue-labeler.yml
-          enable-versioned-regex: 0
 
+      # Automatically assign issues to team members
       - name: Auto Assign Issues
         uses: pozil/auto-assign-issue@v1
         with:
@@ -25,6 +26,7 @@ jobs:
           allowSelfAssign: true
           abortIfPreviousAssignees: true
 
+      # Close invalid issues based on predefined conditions
       - name: Close invalid issues
         uses: actions/github-script@v7
         with:

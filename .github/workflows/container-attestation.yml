@@ -25,27 +25,51 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
           registry: ghcr.io
+
   build:
-      name: Build and push Docker image
-      id: push
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        file: ./Dockerfile
-        push: true
-        tags: ghcr.io/${{ github.repository_owner }}/test-container:latest
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    needs: push_to_registry
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+          registry: ghcr.io
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/test-container:latest
+        id: docker_build
+
   GenerateAttestation:
     name: Generate Attestation
     runs-on: ubuntu-latest
     needs: build
     steps:
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v2
+        uses: sigstore/cosign-installer@v3
         with:
-          subject-name: ghcr.io/${{ github.repository_owner }}/test-container
-          subject-digest: ${{ needs.build.outputs.digest }}
-          push-to-registry: true
+          cosign-version: '1.13.1'
+
+      - name: Generate attestation
+        run: |
+          cosign attest \
+            --key ${{ secrets.SIGNING_KEY }} \
+            --predicate ./predicate.json \
+            --type custom \
+            ghcr.io/${{ github.repository_owner }}/test-container:latest
+
       - name: Upload attestation
-        uses: actions/upload-artifact@v4  
+        uses: actions/upload-artifact@v4
         with:
           name: attestation
+          path: ./attestation.json
