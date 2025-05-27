@@ -72,14 +72,8 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/test-container
-          subject-digest: ${{ env.digest }}
+          subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
-
-      - name: Upload attestation
-        uses: actions/upload-artifact@v4
-        with:
-          name: attestation
-          path: ./attestation.json
 
   OutputSummary:
     name: Output Summary
