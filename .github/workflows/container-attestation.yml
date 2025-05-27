@@ -73,3 +73,6 @@ jobs:
         with:
           name: attestation
           path: ./attestation.json
+
+      - name: Adding markdown
+        run: echo '### Your Build Report🚀' >> $GITHUB_STEP_SUMMARY
