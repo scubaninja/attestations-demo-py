@@ -66,11 +66,11 @@ jobs:
 
       - name: Generate attestation
         run: |
-          cosign attest \
-            --key ${{ secrets.SIGNING_KEY }} \
-            --predicate ./predicate.json \
-            --type custom \
-            ghcr.io/${{ github.repository_owner }}/test-container:latest
+         cosign attest \
+             --key ${{ secrets.SIGNING_KEY }} \
+             --predicate ./predicate.json \
+             --type custom \
+             ghcr.io/${{ github.repository_owner }}/test-container:latest
 
       - name: Upload attestation
         uses: actions/upload-artifact@v4
