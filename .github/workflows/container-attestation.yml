@@ -60,6 +60,10 @@ jobs:
         with:
           cosign-version: '1.13.1'
 
+      - name: Create predicate file
+        run: |
+          echo '{ "buildType": "custom", "description": "Container attestation for test-container" }' > ./predicate.json
+
       - name: Generate attestation
         run: |
           cosign attest \
@@ -76,3 +80,4 @@ jobs:
 
       - name: Adding markdown
         run: echo '### Your Build Report🚀' >> $GITHUB_STEP_SUMMARY
+
