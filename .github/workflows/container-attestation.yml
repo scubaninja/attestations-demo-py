@@ -50,6 +50,9 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/test-container:latest
         id: docker_build
 
+      - name: Extract digest
+        run: echo "digest=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/${{ github.repository_owner }}/test-container:latest)" >> $GITHUB_ENV
+
   GenerateAttestation:
     name: Generate Attestation
     runs-on: ubuntu-latest
@@ -63,7 +66,7 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/test-container
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ env.digest }}
           push-to-registry: true
 
       - name: Upload attestation
