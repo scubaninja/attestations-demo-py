@@ -30,12 +30,22 @@ jobs:
         path: ${{ github.event.inputs.config-path }}
 
   attest-artifact:
+    permissions:
+      packages: write
+      contents: read
+      attestations: write
+      id-token: write
     needs: upload-artifact
     uses: github/artifact-attestations-workflows/.github/workflows/attest.yml@main
     with:
       artifact: ${{ github.event.inputs.artifact-name }}
 
   adding-markdown:
+    permissions:
+      packages: write
+      contents: read
+      attestations: write
+      id-token: write
     needs: attest-artifact
     runs-on: ubuntu-latest
     steps:
