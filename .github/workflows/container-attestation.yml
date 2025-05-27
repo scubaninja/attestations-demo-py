@@ -50,7 +50,7 @@ jobs:
          tags: ghcr.io/${{ github.repository_owner }}/test-container:latest
         id: docker_build
     outputs:
-        digest: ${{ steps.docker_build.outputs.digest }}
+      digest: ${{ steps.docker_build.outputs.digest }}
 
   GenerateAttestation:
     name: Generate Attestation
@@ -65,7 +65,7 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/test-container
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ needs.build.outputs.digest }}
           push-to-registry: true
 
   OutputSummary:
@@ -77,8 +77,8 @@ jobs:
         run: |
           echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "Container Image: ghcr.io/${{ github.repository_owner }}/test-container:latest" >> $GITHUB_STEP_SUMMARY
-          echo "Image Digest: ${{ env.digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "Image Digest: ${{ needs.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
           echo "Attestation Artifact: attestation.json" >> $GITHUB_STEP_SUMMARY
 
-      
+
 
