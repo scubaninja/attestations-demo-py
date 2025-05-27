@@ -42,3 +42,15 @@ jobs:
           predicate-type: 'https://in-toto.io/attestation/release/v0.1'
           predicate: '{"purl":"pkg:oci/..."}'
           push-to-registry: true
+
+  OutputSummary:
+    name: Output Summary
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Output build summary
+        run: |
+          echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Container Image: ghcr.io/${{ github.repository_owner }}/test-container:latest" >> $GITHUB_STEP_SUMMARY
+          echo "Image Digest: ${{ needs.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "Attestation Artifact: attestation.json" >> $GITHUB_STEP_SUMMARY
