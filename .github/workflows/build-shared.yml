@@ -34,3 +34,16 @@ jobs:
     uses: github/artifact-attestations-workflows/.github/workflows/attest.yml@main
     with:
       artifact: ${{ github.event.inputs.artifact-name }}
+
+  adding-markdown:
+    needs: attest-artifact
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up GitHub CLI
+      uses: cli/cli-action@v3
+
+    - name: Create or update step summary
+      run: echo 'This is a summary of the workflow run.' > $GITHUB_STEP_SUMMARY
