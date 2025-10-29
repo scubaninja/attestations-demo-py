@@ -1,4 +1,4 @@
-name: build-attested-image
+name: Build Attested Container Image
 
 on:
   push:
