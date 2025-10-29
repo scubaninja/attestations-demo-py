@@ -1,4 +1,4 @@
-name: CI/CD Pipeline Status
+name: Reusable CI/CD Pipeline
 
 on:
   push:
