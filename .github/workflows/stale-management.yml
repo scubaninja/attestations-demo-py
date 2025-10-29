@@ -1,0 +1,161 @@
+name: Stale Issue Management
+
+on:
+  # Schedule for stale issue management
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight UTC
+  # Manual trigger
+  workflow_dispatch:
+
+jobs:
+  manage-stale-issues:
+    name: Manage Stale Issues and PRs
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    
+    steps:
+      - name: Mark stale issues and PRs
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Issues configuration
+          days-before-issue-stale: 60
+          days-before-issue-close: 7
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has not had recent activity. 
+            
+            **Next steps:**
+            - Add a comment to keep it open
+            - Close if no longer relevant  
+            - Convert to discussion if it's more of a question
+            
+            This issue will be closed in 7 days if no further activity occurs.
+          stale-issue-label: 'stale'
+          close-issue-message: |
+            This issue has been automatically closed due to inactivity. 
+            
+            If you believe this issue is still relevant, please reopen it or create a new issue with updated information.
+          
+          # PRs configuration  
+          days-before-pr-stale: 30
+          days-before-pr-close: 7
+          stale-pr-message: |
+            This pull request has been automatically marked as stale because it has not had recent activity.
+            
+            **To keep this PR active:**
+            - Push new commits
+            - Add a comment explaining the current status
+            - Request a review if ready
+            
+            This PR will be closed in 7 days if no further activity occurs.
+          stale-pr-label: 'stale'
+          close-pr-message: |
+            This pull request has been automatically closed due to inactivity.
+            
+            If you'd like to continue this work, please reopen the PR or create a new one.
+          
+          # Labels to exempt from stale marking
+          exempt-issue-labels: 'pinned,security,priority: high,in progress'
+          exempt-pr-labels: 'pinned,security,priority: high,work in progress'
+          
+          # Only process a limited number per run to avoid API limits
+          operations-per-run: 50
+          
+          # Remove stale label when there's new activity
+          remove-stale-when-updated: true
+
+  stale-metrics:
+    name: Stale Management Metrics
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      issues: read
+      pull-requests: read
+    
+    steps:
+      - name: Generate stale management report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            try {
+              // Get stale issues and PRs
+              const { data: staleIssues } = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${owner}/${repo} type:issue label:stale state:open`,
+                per_page: 100
+              });
+              
+              const { data: stalePRs } = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${owner}/${repo} type:pr label:stale state:open`,
+                per_page: 100
+              });
+              
+              // Get recently closed stale items (last 7 days)
+              const sevenDaysAgo = new Date();
+              sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+              
+              const { data: recentlyClosedIssues } = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${owner}/${repo} type:issue state:closed closed:>=${sevenDaysAgo.toISOString().split('T')[0]}`,
+                per_page: 100
+              });
+              
+              const { data: recentlyClosedPRs } = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${owner}/${repo} type:pr state:closed closed:>=${sevenDaysAgo.toISOString().split('T')[0]}`,
+                per_page: 100
+              });
+              
+              // Filter for stale-closed items (this is approximate since we can't easily search for specific close reasons)
+              const staleClosedIssues = recentlyClosedIssues.items.filter(issue => 
+                issue.labels.some(label => label.name === 'stale')
+              );
+              
+              const staleClosedPRs = recentlyClosedPRs.items.filter(pr => 
+                pr.labels.some(label => label.name === 'stale')
+              );
+              
+              const summary = `### 🧹 Stale Management Report
+              
+              **Currently Stale:**
+              - **Issues:** ${staleIssues.total_count} marked as stale
+              - **Pull Requests:** ${stalePRs.total_count} marked as stale
+              
+              **Recently Auto-Closed (Last 7 days):**
+              - **Issues:** ~${staleClosedIssues.length} closed due to staleness
+              - **Pull Requests:** ~${staleClosedPRs.length} closed due to staleness
+              
+              **Stale Items by Age:**`;
+              
+              // Add age breakdown for stale items
+              let ageBreakdown = '\n';
+              if (staleIssues.items.length > 0) {
+                const now = new Date();
+                const ageGroups = { '1-3 days': 0, '4-7 days': 0, '7+ days': 0 };
+                
+                staleIssues.items.forEach(issue => {
+                  const staleDate = new Date(issue.updated_at);
+                  const daysDiff = Math.floor((now - staleDate) / (1000 * 60 * 60 * 24));
+                  
+                  if (daysDiff <= 3) ageGroups['1-3 days']++;
+                  else if (daysDiff <= 7) ageGroups['4-7 days']++;
+                  else ageGroups['7+ days']++;
+                });
+                
+                ageBreakdown += `- 1-3 days stale: ${ageGroups['1-3 days']} issues\n`;
+                ageBreakdown += `- 4-7 days stale: ${ageGroups['4-7 days']} issues\n`;
+                ageBreakdown += `- 7+ days stale: ${ageGroups['7+ days']} issues\n`;
+              }
+              
+              const fullSummary = summary + ageBreakdown + `\nGenerated on: ${new Date().toISOString().split('T')[0]}`;
+              
+              core.summary.addRaw(fullSummary);
+              await core.summary.write();
+              
+              console.log(fullSummary);
+              
+            } catch (error) {
+              core.setFailed(`Failed to generate stale management metrics: ${error.message}`);
+            }

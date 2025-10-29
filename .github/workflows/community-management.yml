@@ -1,0 +1,251 @@
+name: Community Management
+
+on:
+  # Trigger when new user joins (via issues, PRs, discussions)
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+  discussion:
+    types: [created]
+  # Manual trigger
+  workflow_dispatch:
+
+jobs:
+  welcome-new-contributors:
+    name: Welcome New Contributors
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' || github.event_name == 'pull_request' || github.event_name == 'discussion'
+    permissions:
+      issues: write
+      pull-requests: write
+      discussions: write
+    
+    steps:
+      - name: Check if first-time contributor
+        id: check-contributor
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const author = context.payload.sender.login;
+            
+            try {
+              // Check if user has previous contributions
+              const { data: issues } = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${owner}/${repo} author:${author} type:issue`,
+                per_page: 1
+              });
+              
+              const { data: prs } = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${owner}/${repo} author:${author} type:pr`,
+                per_page: 1
+              });
+              
+              const isFirstTime = issues.total_count === 0 && prs.total_count === 0;
+              
+              if (context.eventName === 'issues' && issues.total_count <= 1) {
+                core.setOutput('is-first-issue', true);
+              }
+              if (context.eventName === 'pull_request' && prs.total_count <= 1) {
+                core.setOutput('is-first-pr', true);
+              }
+              
+              core.setOutput('is-first-time', isFirstTime);
+              core.setOutput('author', author);
+            } catch (error) {
+              core.setOutput('is-first-time', false);
+              core.setOutput('author', author);
+            }
+
+      - name: Welcome new issue contributor
+        if: steps.check-contributor.outputs.is-first-issue == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const welcomeMessage = `👋 Welcome to the project, @${{ steps.check-contributor.outputs.author }}! 
+
+            Thank you for opening your first issue. We appreciate your contribution to the community! 
+
+            **What happens next?**
+            - Our maintainers will review your issue
+            - If you're reporting a bug, please ensure you've included reproduction steps
+            - If you're requesting a feature, we'll discuss the implementation approach
+
+            **Getting involved:**
+            - Check out our [Contributing Guide](../../blob/main/README.md)
+            - Join our discussions for questions and ideas
+            - Look for issues labeled \`good first issue\` if you'd like to contribute code
+
+            Thanks again for being part of our community! 🚀`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: welcomeMessage
+            });
+
+      - name: Welcome new PR contributor
+        if: steps.check-contributor.outputs.is-first-pr == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const welcomeMessage = `🎉 Thank you for your first pull request, @${{ steps.check-contributor.outputs.author }}!
+
+            We're excited to have you contributing to the project! 
+
+            **Review process:**
+            - Our maintainers will review your changes
+            - We may request some modifications or ask questions
+            - Once approved, we'll merge your contribution
+
+            **Tips for success:**
+            - Make sure your PR has a clear description of what it does
+            - Include tests if applicable
+            - Keep your changes focused and atomic
+
+            **While you wait:**
+            - Check out other open issues you might want to work on
+            - Join our discussions for questions and ideas
+            - Review our [Contributing Guide](../../blob/main/README.md)
+
+            Thank you for making our project better! 🙌`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: welcomeMessage
+            });
+
+  auto-tag:
+    name: Auto Tag Issues and PRs
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' || github.event_name == 'pull_request'
+    permissions:
+      issues: write
+      pull-requests: write
+    
+    steps:
+      - name: Auto-tag issues and PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const isIssue = context.eventName === 'issues';
+            const isPR = context.eventName === 'pull_request';
+            const item = isIssue ? context.payload.issue : context.payload.pull_request;
+            
+            const title = item.title.toLowerCase();
+            const body = (item.body || '').toLowerCase();
+            const content = `${title} ${body}`;
+            
+            const labels = [];
+            
+            // Type-based labels
+            if (isIssue) {
+              if (content.includes('bug') || content.includes('error') || content.includes('broken')) {
+                labels.push('bug');
+              } else if (content.includes('feature') || content.includes('enhancement') || content.includes('improvement')) {
+                labels.push('enhancement');
+              } else if (content.includes('question') || content.includes('help') || content.includes('how to')) {
+                labels.push('question');
+              } else if (content.includes('documentation') || content.includes('docs') || content.includes('readme')) {
+                labels.push('documentation');
+              }
+            }
+            
+            if (isPR) {
+              labels.push('pr');
+              
+              if (content.includes('fix') || content.includes('bug')) {
+                labels.push('bugfix');
+              } else if (content.includes('feature') || content.includes('add') || content.includes('new')) {
+                labels.push('feature');
+              } else if (content.includes('refactor') || content.includes('cleanup')) {
+                labels.push('refactoring');
+              } else if (content.includes('doc') || content.includes('readme')) {
+                labels.push('documentation');
+              }
+            }
+            
+            // Priority labels
+            if (content.includes('urgent') || content.includes('critical') || content.includes('blocking')) {
+              labels.push('priority: high');
+            } else if (content.includes('minor') || content.includes('trivial')) {
+              labels.push('priority: low');
+            }
+            
+            // Component labels based on file paths or content
+            if (content.includes('docker') || content.includes('container')) {
+              labels.push('docker');
+            }
+            if (content.includes('workflow') || content.includes('github action') || content.includes('ci/cd')) {
+              labels.push('ci/cd');
+            }
+            if (content.includes('security') || content.includes('vulnerability')) {
+              labels.push('security');
+            }
+            if (content.includes('performance') || content.includes('optimization')) {
+              labels.push('performance');
+            }
+            
+            // Apply labels if any were determined
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: item.number,
+                labels
+              });
+            }
+
+  community-metrics:
+    name: Community Metrics
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      issues: read
+      pull-requests: read
+    
+    steps:
+      - name: Generate community report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            
+            try {
+              // Get issues and PRs from last 30 days
+              const { data: recentIssues } = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${owner}/${repo} type:issue created:>=${thirtyDaysAgo.toISOString().split('T')[0]}`,
+                per_page: 100
+              });
+              
+              const { data: recentPRs } = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${owner}/${repo} type:pr created:>=${thirtyDaysAgo.toISOString().split('T')[0]}`,
+                per_page: 100
+              });
+              
+              const uniqueContributors = new Set();
+              recentIssues.items.forEach(issue => uniqueContributors.add(issue.user.login));
+              recentPRs.items.forEach(pr => uniqueContributors.add(pr.user.login));
+              
+              const summary = `### 📊 Community Metrics (Last 30 Days)
+              
+              - **New Issues:** ${recentIssues.total_count}
+              - **New Pull Requests:** ${recentPRs.total_count}  
+              - **Unique Contributors:** ${uniqueContributors.size}
+              - **Total Activity:** ${recentIssues.total_count + recentPRs.total_count}
+              
+              Generated on: ${new Date().toISOString().split('T')[0]}`;
+              
+              core.summary.addRaw(summary);
+              await core.summary.write();
+              
+            } catch (error) {
+              core.setFailed(`Failed to generate metrics: ${error.message}`);
+            }
