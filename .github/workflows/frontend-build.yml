@@ -1,6 +1,7 @@
 name: Frontend Build
 
 on:
+  workflow_dispatch:
   workflow_call:
     outputs:
       status:

@@ -1,4 +1,4 @@
-name: 🚀 CI/CD Pipeline Status
+name: CI/CD Pipeline Status
 
 on:
   push:
@@ -11,12 +11,12 @@ jobs:
   # Backend build for the Python Flask application  
   backend-build:
     name: 🐍 Backend
-    uses: ./.github/workflows/simple-backend-build.yml
+    uses: ./.github/workflows/backend-build.yml
     
   # Frontend build (optional - since this is primarily a Python backend)
   frontend-build:
     name: 🎨 Frontend  
-    uses: ./.github/workflows/simple-frontend-build.yml
+    uses: ./.github/workflows/frontend-build.yml
     
   # Summary job that runs after both builds
   summary:
