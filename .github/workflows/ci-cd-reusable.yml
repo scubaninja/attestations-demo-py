@@ -20,7 +20,7 @@ jobs:
     
   # Summary job that runs after both builds
   summary:
-    name: 📊 Build Summary
+    name: 📊 Build 
     runs-on: ubuntu-latest
     needs: [backend-build, frontend-build]
     if: always()
@@ -35,16 +35,16 @@ jobs:
           
           # Backend status
           if [[ "${{ needs.backend-build.result }}" == "success" ]]; then
-            echo "🐍 **Backend Build:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+            echo "**Backend Build:** ✅ Success" >> $GITHUB_STEP_SUMMARY
           else
-            echo "🐍 **Backend Build:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Backend Build:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
           fi
           
           # Frontend status  
           if [[ "${{ needs.frontend-build.result }}" == "success" ]]; then
-            echo "🎨 **Frontend Build:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+            echo "**Frontend Build:** ✅ Success" >> $GITHUB_STEP_SUMMARY
           else
-            echo "🎨 **Frontend Build:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Frontend Build:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
