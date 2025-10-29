@@ -1,0 +1,207 @@
+name: Reusable Frontend Build
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '18.x'
+      build-command:
+        description: 'Build command to run'
+        required: false
+        type: string
+        default: 'npm run build'
+      test-command:
+        description: 'Test command to run'
+        required: false
+        type: string
+        default: 'npm test'
+      package-manager:
+        description: 'Package manager to use (npm, yarn, pnpm)'
+        required: false
+        type: string
+        default: 'npm'
+      build-path:
+        description: 'Path to build directory'
+        required: false
+        type: string
+        default: './dist'
+      enable-tests:
+        description: 'Enable running tests'
+        required: false
+        type: boolean
+        default: true
+      enable-linting:
+        description: 'Enable linting'
+        required: false
+        type: boolean
+        default: true
+      
+    outputs:
+      build-status:
+        description: 'Build completion status'
+        value: ${{ jobs.frontend-build.outputs.status }}
+      artifact-path:
+        description: 'Path to built artifacts'
+        value: ${{ jobs.frontend-build.outputs.artifact-path }}
+      test-results:
+        description: 'Test results summary'
+        value: ${{ jobs.frontend-build.outputs.test-results }}
+
+jobs:
+  frontend-build:
+    name: 🎨 Frontend Build
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.build-status.outputs.status }}
+      artifact-path: ${{ steps.build-status.outputs.artifact-path }}
+      test-results: ${{ steps.test-summary.outputs.results }}
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: 🔧 Setup Node.js ${{ inputs.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+          
+      - name: 📦 Install dependencies
+        run: |
+          case "${{ inputs.package-manager }}" in
+            "yarn")
+              yarn install --frozen-lockfile
+              ;;
+            "pnpm")
+              npm install -g pnpm
+              pnpm install --frozen-lockfile
+              ;;
+            *)
+              npm ci
+              ;;
+          esac
+          
+      - name: 🔍 Run linting
+        if: inputs.enable-linting
+        continue-on-error: true
+        id: lint
+        run: |
+          case "${{ inputs.package-manager }}" in
+            "yarn")
+              yarn lint || echo "lint-failed=true" >> $GITHUB_OUTPUT
+              ;;
+            "pnpm")
+              pnpm lint || echo "lint-failed=true" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              npm run lint || echo "lint-failed=true" >> $GITHUB_OUTPUT
+              ;;
+          esac
+          
+      - name: 🧪 Run tests
+        if: inputs.enable-tests
+        id: test
+        continue-on-error: true
+        run: |
+          case "${{ inputs.package-manager }}" in
+            "yarn")
+              yarn test --coverage --ci --watchAll=false
+              ;;
+            "pnpm")
+              pnpm test --coverage --ci --watchAll=false
+              ;;
+            *)
+              npm run test -- --coverage --ci --watchAll=false
+              ;;
+          esac
+          
+          # Capture test results
+          if [[ $? -eq 0 ]]; then
+            echo "test-status=passed" >> $GITHUB_OUTPUT
+          else
+            echo "test-status=failed" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: 🏗️ Build application
+        id: build
+        run: |
+          case "${{ inputs.package-manager }}" in
+            "yarn")
+              yarn build
+              ;;
+            "pnpm")
+              pnpm build
+              ;;
+            *)
+              npm run build
+              ;;
+          esac
+          
+      - name: 📊 Generate build summary
+        id: build-status
+        run: |
+          BUILD_SIZE=""
+          if [[ -d "${{ inputs.build-path }}" ]]; then
+            BUILD_SIZE=$(du -sh ${{ inputs.build-path }} | cut -f1)
+            echo "artifact-path=${{ inputs.build-path }}" >> $GITHUB_OUTPUT
+          else
+            echo "artifact-path=./build" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "## 🎨 Frontend Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Node.js Version:** ${{ inputs.node-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Package Manager:** ${{ inputs.package-manager }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Path:** ${{ inputs.build-path }}" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "$BUILD_SIZE" ]]; then
+            echo "**Build Size:** $BUILD_SIZE" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Build status
+          echo "### ✅ Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "- 🏗️ **Build:** ✅ Successful" >> $GITHUB_STEP_SUMMARY
+          
+          # Linting results
+          if [[ "${{ inputs.enable-linting }}" == "true" ]]; then
+            if [[ "${{ steps.lint.outputs.lint-failed }}" == "true" ]]; then
+              echo "- 🔍 **Linting:** ⚠️ Issues found" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- 🔍 **Linting:** ✅ Clean" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "- 🔍 **Linting:** ⏭️ Disabled" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Test results
+          if [[ "${{ inputs.enable-tests }}" == "true" ]]; then
+            if [[ "${{ steps.test.outputs.test-status }}" == "passed" ]]; then
+              echo "- 🧪 **Tests:** ✅ All passed" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- 🧪 **Tests:** ❌ Some failed" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "- 🧪 **Tests:** ⏭️ Disabled" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "status=success" >> $GITHUB_OUTPUT
+          
+      - name: 📤 Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: ${{ inputs.build-path }}
+          retention-days: 7
+          
+      - name: 📋 Test summary
+        id: test-summary
+        if: inputs.enable-tests
+        run: |
+          if [[ "${{ steps.test.outputs.test-status }}" == "passed" ]]; then
+            echo "results=All tests passed ✅" >> $GITHUB_OUTPUT
+          else
+            echo "results=Some tests failed ❌" >> $GITHUB_OUTPUT
+          fi

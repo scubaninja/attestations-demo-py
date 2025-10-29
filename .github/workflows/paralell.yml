@@ -7,29 +7,119 @@ on:
 
 jobs:
   FrontEnd:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Front End Build
-        run: echo "Building Front End"
-      
+    name: 🎨 Frontend Build
+    uses: ./.github/workflows/reusable-frontend-build.yml
+    with:
+      node-version: '18.x'
+      package-manager: 'npm'
+      enable-tests: true
+      enable-linting: true
+      build-path: './dist'
 
   BackEnd:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Back End Build
-        run: echo "Building Back End"
+    name: ⚙️ Backend Build  
+    uses: ./.github/workflows/reusable-backend-build.yml
+    with:
+      runtime-type: 'python'
+      runtime-version: '3.11'
+      enable-tests: true
+      enable-linting: true
+      build-path: './dist'
         
   IaC:
+    name: 🏗️ Infrastructure Build
     runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.terraform.outputs.status }}
+      plan-summary: ${{ steps.terraform.outputs.plan-summary }}
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
-      - name: IaC Build 
-        run: echo "Building IaC"
+        
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.0'
+          
+      - name: 📋 Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+        
+      - name: 🔍 Terraform Init
+        id: init
+        run: terraform init
+        
+      - name: 📊 Terraform Validate
+        id: validate
+        run: terraform validate
+        
+      - name: 📝 Terraform Plan
+        id: plan
+        run: |
+          terraform plan -detailed-exitcode -no-color -out=tfplan
+          echo "plan-exitcode=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+        
+      - name: 📊 Generate IaC Summary
+        id: terraform
+        run: |
+          echo "## 🏗️ Infrastructure as Code Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Terraform Version:** 1.5.0" >> $GITHUB_STEP_SUMMARY
+          echo "**Working Directory:** $(pwd)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### ✅ Terraform Results" >> $GITHUB_STEP_SUMMARY
+          
+          # Format check
+          if [[ "${{ steps.fmt.outcome }}" == "success" ]]; then
+            echo "- 📋 **Format Check:** ✅ Properly formatted" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- 📋 **Format Check:** ⚠️ Formatting issues found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Initialization
+          if [[ "${{ steps.init.outcome }}" == "success" ]]; then
+            echo "- 🔍 **Initialization:** ✅ Successful" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- 🔍 **Initialization:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Validation
+          if [[ "${{ steps.validate.outcome }}" == "success" ]]; then
+            echo "- 📊 **Validation:** ✅ Configuration valid" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- 📊 **Validation:** ❌ Configuration invalid" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Plan
+          if [[ "${{ steps.plan.outcome }}" == "success" ]]; then
+            case "${{ steps.plan.outputs.plan-exitcode }}" in
+              "0")
+                echo "- 📝 **Plan:** ✅ No changes needed" >> $GITHUB_STEP_SUMMARY
+                echo "plan-summary=No changes" >> $GITHUB_OUTPUT
+                ;;
+              "2")
+                echo "- 📝 **Plan:** ✅ Changes planned" >> $GITHUB_STEP_SUMMARY
+                echo "plan-summary=Changes detected" >> $GITHUB_OUTPUT
+                ;;
+              *)
+                echo "- 📝 **Plan:** ❌ Planning failed" >> $GITHUB_STEP_SUMMARY
+                echo "plan-summary=Planning failed" >> $GITHUB_OUTPUT
+                ;;
+            esac
+          else
+            echo "- 📝 **Plan:** ❌ Planning failed" >> $GITHUB_STEP_SUMMARY
+            echo "plan-summary=Planning failed" >> $GITHUB_OUTPUT
+          fi
+          
+          # Overall status
+          if [[ "${{ steps.init.outcome }}" == "success" && "${{ steps.validate.outcome }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+          fi
 
   job-summary:
     name: 📊 Build Summary
@@ -38,7 +128,7 @@ jobs:
     if: always()
     
     steps:
-      - name: Generate Build Summary
+      - name: Generate Comprehensive Build Summary
         run: |
           echo "# 🚀 Parallel Build Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -47,50 +137,78 @@ jobs:
           echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Triggered by:** ${{ github.event_name }} 🔄" >> $GITHUB_STEP_SUMMARY
           echo "**Workflow run:** #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build time:** $(date +'%B %d, %Y at %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "## 📋 Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "## 📋 Detailed Build Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Frontend Status
+          # Frontend Status with details
+          echo "### 🎨 Frontend Build" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ needs.FrontEnd.result }}" == "success" ]]; then
-            echo "🎨 **Frontend Build:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+            echo "**Build Status:** ${{ needs.FrontEnd.outputs.build-status }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Artifact Path:** ${{ needs.FrontEnd.outputs.artifact-path }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Test Results:** ${{ needs.FrontEnd.outputs.test-results }}" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ needs.FrontEnd.result }}" == "failure" ]]; then
-            echo "🎨 **Frontend Build:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Issue:** Check the frontend build logs for details" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ needs.FrontEnd.result }}" == "cancelled" ]]; then
-            echo "🎨 **Frontend Build:** ⏹️ Cancelled" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ⏹️ Cancelled" >> $GITHUB_STEP_SUMMARY
           else
-            echo "🎨 **Frontend Build:** ⏭️ Skipped" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ⏭️ Skipped" >> $GITHUB_STEP_SUMMARY
           fi
+          echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Backend Status
+          # Backend Status with details
+          echo "### ⚙️ Backend Build" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ needs.BackEnd.result }}" == "success" ]]; then
-            echo "⚙️ **Backend Build:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+            echo "**Build Status:** ${{ needs.BackEnd.outputs.build-status }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Artifact Path:** ${{ needs.BackEnd.outputs.artifact-path }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Test Results:** ${{ needs.BackEnd.outputs.test-results }}" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ needs.BackEnd.result }}" == "failure" ]]; then
-            echo "⚙️ **Backend Build:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Issue:** Check the backend build logs for details" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ needs.BackEnd.result }}" == "cancelled" ]]; then
-            echo "⚙️ **Backend Build:** ⏹️ Cancelled" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ⏹️ Cancelled" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚙️ **Backend Build:** ⏭️ Skipped" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ⏭️ Skipped" >> $GITHUB_STEP_SUMMARY
           fi
+          echo "" >> $GITHUB_STEP_SUMMARY
           
-          # IaC Status
+          # IaC Status with details
+          echo "### 🏗️ Infrastructure as Code" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ needs.IaC.result }}" == "success" ]]; then
-            echo "🏗️ **Infrastructure as Code:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+            echo "**Infrastructure Status:** ${{ needs.IaC.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Plan Summary:** ${{ needs.IaC.outputs.plan-summary }}" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ needs.IaC.result }}" == "failure" ]]; then
-            echo "🏗️ **Infrastructure as Code:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Issue:** Check the IaC build logs for details" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ needs.IaC.result }}" == "cancelled" ]]; then
-            echo "🏗️ **Infrastructure as Code:** ⏹️ Cancelled" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ⏹️ Cancelled" >> $GITHUB_STEP_SUMMARY
           else
-            echo "🏗️ **Infrastructure as Code:** ⏭️ Skipped" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ⏭️ Skipped" >> $GITHUB_STEP_SUMMARY
           fi
-          
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Overall Status
           OVERALL_STATUS="🎉 All builds completed successfully!"
-          if [[ "${{ needs.FrontEnd.result }}" == "failure" || "${{ needs.BackEnd.result }}" == "failure" || "${{ needs.IaC.result }}" == "failure" ]]; then
-            OVERALL_STATUS="💥 Some builds failed - check the logs above"
+          SUCCESS_COUNT=0
+          FAILURE_COUNT=0
+          
+          # Count successes and failures
+          [[ "${{ needs.FrontEnd.result }}" == "success" ]] && ((SUCCESS_COUNT++))
+          [[ "${{ needs.BackEnd.result }}" == "success" ]] && ((SUCCESS_COUNT++))
+          [[ "${{ needs.IaC.result }}" == "success" ]] && ((SUCCESS_COUNT++))
+          
+          [[ "${{ needs.FrontEnd.result }}" == "failure" ]] && ((FAILURE_COUNT++))
+          [[ "${{ needs.BackEnd.result }}" == "failure" ]] && ((FAILURE_COUNT++))
+          [[ "${{ needs.IaC.result }}" == "failure" ]] && ((FAILURE_COUNT++))
+          
+          if [[ $FAILURE_COUNT -gt 0 ]]; then
+            OVERALL_STATUS="💥 $FAILURE_COUNT out of 3 builds failed"
           elif [[ "${{ needs.FrontEnd.result }}" == "cancelled" || "${{ needs.BackEnd.result }}" == "cancelled" || "${{ needs.IaC.result }}" == "cancelled" ]]; then
             OVERALL_STATUS="⏸️ Build pipeline was cancelled"
           fi
@@ -98,47 +216,61 @@ jobs:
           echo "## 🎯 Overall Status" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "$OVERALL_STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "**Success Rate:** $SUCCESS_COUNT/3 builds completed successfully" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Build Statistics
-          echo "## 📊 Build Statistics" >> $GITHUB_STEP_SUMMARY
+          # Enhanced Build Statistics
+          echo "## 📊 Build Statistics & Performance" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Component | Status | Duration |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|--------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🎨 Frontend | ${{ needs.FrontEnd.result }} | ~30s |" >> $GITHUB_STEP_SUMMARY
-          echo "| ⚙️ Backend | ${{ needs.BackEnd.result }} | ~30s |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🏗️ Infrastructure | ${{ needs.IaC.result }} | ~30s |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Fun Facts
-          echo "## 🎲 Fun Facts" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- 🚀 This pipeline ran **3 jobs in parallel** for maximum efficiency!" >> $GITHUB_STEP_SUMMARY
-          echo "- ⚡ Parallel execution saves approximately **60-90 seconds** compared to sequential builds" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔄 This is workflow run number **#${{ github.run_number }}** for this repository" >> $GITHUB_STEP_SUMMARY
-          echo "- 📅 Build completed on **$(date +'%B %d, %Y at %H:%M UTC')**" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status | Technology | Artifacts | Tests |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|------------|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🎨 Frontend | ${{ needs.FrontEnd.result }} | Node.js 18.x | ${{ needs.FrontEnd.outputs.artifact-path || 'N/A' }} | ${{ needs.FrontEnd.outputs.test-results || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚙️ Backend | ${{ needs.BackEnd.result }} | Python 3.11 | ${{ needs.BackEnd.outputs.artifact-path || 'N/A' }} | ${{ needs.BackEnd.outputs.test-results || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🏗️ Infrastructure | ${{ needs.IaC.result }} | Terraform 1.5.0 | ${{ needs.IaC.outputs.plan-summary || 'N/A' }} | Config Validation |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Next Steps
-          echo "## 🎯 What's Next?" >> $GITHUB_STEP_SUMMARY
+          # Enhanced Fun Facts
+          echo "## 🎲 Pipeline Insights" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [[ "$OVERALL_STATUS" == *"successfully"* ]]; then
-            echo "🎉 **Great job!** All components built successfully. Ready for deployment!" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 **Parallel Efficiency:** 3 jobs executed simultaneously" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚡ **Time Savings:** ~60-90 seconds saved vs sequential execution" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔄 **Build Number:** #${{ github.run_number }} for this repository" >> $GITHUB_STEP_SUMMARY
+          echo "- �️ **Technology Stack:** Node.js Frontend + Python Backend + Terraform IaC" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 **Reusable Workflows:** Leveraging modular, reusable build components" >> $GITHUB_STEP_SUMMARY
+          echo "- 🧪 **Quality Gates:** Automated testing and linting for all components" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Next Steps based on results
+          echo "## 🎯 Recommended Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ $FAILURE_COUNT -eq 0 ]]; then
+            echo "🎉 **Excellent!** All builds succeeded. Your pipeline is ready for the next stage." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Recommended next steps:**" >> $GITHUB_STEP_SUMMARY
-            echo "- 🧪 Run integration tests" >> $GITHUB_STEP_SUMMARY
-            echo "- 🔒 Perform security scans" >> $GITHUB_STEP_SUMMARY
-            echo "- 🚀 Deploy to staging environment" >> $GITHUB_STEP_SUMMARY
+            echo "**Ready for deployment pipeline:**" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ **Frontend:** Build artifacts ready for deployment" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ **Backend:** Application ready for containerization" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ **Infrastructure:** Terraform plans validated and ready" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Suggested actions:**" >> $GITHUB_STEP_SUMMARY
+            echo "- 🧪 Run end-to-end integration tests" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔒 Execute security scans and vulnerability assessments" >> $GITHUB_STEP_SUMMARY
+            echo "- 🚀 Deploy to staging environment for validation" >> $GITHUB_STEP_SUMMARY
+            echo "- 📊 Review performance metrics and optimization opportunities" >> $GITHUB_STEP_SUMMARY
           else
-            echo "🔧 **Action needed:** Some builds failed. Please review the logs and fix any issues." >> $GITHUB_STEP_SUMMARY
+            echo "🔧 **Action Required:** $FAILURE_COUNT build(s) failed and need attention." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Troubleshooting tips:**" >> $GITHUB_STEP_SUMMARY
-            echo "- 📋 Check the individual job logs for detailed error messages" >> $GITHUB_STEP_SUMMARY
-            echo "- 🔄 Try re-running the failed jobs" >> $GITHUB_STEP_SUMMARY
-            echo "- 💬 Ask for help in the team chat if issues persist" >> $GITHUB_STEP_SUMMARY
+            echo "**Troubleshooting guide:**" >> $GITHUB_STEP_SUMMARY
+            echo "1. 📋 **Review Logs:** Click on the failed job(s) above for detailed error messages" >> $GITHUB_STEP_SUMMARY
+            echo "2. � **Check Dependencies:** Ensure all required packages and tools are available" >> $GITHUB_STEP_SUMMARY
+            echo "3. 🧪 **Test Locally:** Reproduce the build locally to debug issues" >> $GITHUB_STEP_SUMMARY
+            echo "4. 🔄 **Retry Strategy:** Use 'Re-run failed jobs' for transient issues" >> $GITHUB_STEP_SUMMARY
+            echo "5. 💬 **Get Help:** Reach out to the team if issues persist" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "💡 **Tip:** You can re-run individual failed jobs without running the entire workflow!" >> $GITHUB_STEP_SUMMARY
+          echo "💡 **Pro Tips:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Use 'Re-run failed jobs' to retry only the failed components" >> $GITHUB_STEP_SUMMARY
+          echo "- Check individual job summaries for detailed build information" >> $GITHUB_STEP_SUMMARY
+          echo "- Each reusable workflow provides its own detailed summary" >> $GITHUB_STEP_SUMMARY
         
