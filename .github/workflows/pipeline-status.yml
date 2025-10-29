@@ -10,12 +10,12 @@ on:
 jobs:
   # Backend build for the Python Flask application  
   backend-build:
-    name: 🐍 Backend
+    name: Backend
     uses: ./.github/workflows/backend-build.yml
     
   # Frontend build (optional - since this is primarily a Python backend)
   frontend-build:
-    name: 🎨 Frontend  
+    name: Frontend  
     uses: ./.github/workflows/frontend-build.yml
     
   # Summary job that runs after both builds

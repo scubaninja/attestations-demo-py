@@ -10,7 +10,7 @@ on:
 
 jobs:
   frontend:
-    name: 🎨 Frontend Build
+    name: Frontend Build
     runs-on: ubuntu-latest
     outputs:
       status: ${{ steps.summary.outputs.status }}
