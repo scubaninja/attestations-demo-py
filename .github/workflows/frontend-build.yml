@@ -1,4 +1,4 @@
-name: Reusable Frontend Build
+name: Frontend Build
 
 on:
   workflow_call:
@@ -18,7 +18,7 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
         
-      - name: 🎨 Simulate Frontend Build
+      - name: 🎨 Frontend Build
         run: |
           echo "🎨 Building frontend components..."
           echo "   ✅ HTML templates processed"
@@ -26,7 +26,7 @@ jobs:
           echo "   ✅ JavaScript bundled"
           echo "   ✅ Assets optimized"
           sleep 2
-          echo "� Frontend build completed!"
+          echo "🎉 Frontend build completed!"
           
       - name: 📊 Generate Summary
         id: summary

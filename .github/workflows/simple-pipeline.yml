@@ -1,0 +1,64 @@
+name: 🚀 CI/CD Pipeline Status
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # Backend build for the Python Flask application  
+  backend-build:
+    name: 🐍 Backend
+    uses: ./.github/workflows/simple-backend-build.yml
+    
+  # Frontend build (optional - since this is primarily a Python backend)
+  frontend-build:
+    name: 🎨 Frontend  
+    uses: ./.github/workflows/simple-frontend-build.yml
+    
+  # Summary job that runs after both builds
+  summary:
+    name: 📊 Build Summary
+    runs-on: ubuntu-latest
+    needs: [backend-build, frontend-build]
+    if: always()
+    
+    steps:
+      - name: 📋 Generate Overall Summary
+        run: |
+          echo "# 🚀 Simple CI/CD Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Build Status Overview" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Backend status
+          if [[ "${{ needs.backend-build.result }}" == "success" ]]; then
+            echo "🐍 **Backend Build:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🐍 **Backend Build:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Frontend status  
+          if [[ "${{ needs.frontend-build.result }}" == "success" ]]; then
+            echo "🎨 **Frontend Build:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🎨 **Frontend Build:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall result
+          if [[ "${{ needs.backend-build.result }}" == "success" && "${{ needs.frontend-build.result }}" == "success" ]]; then
+            echo "🎉 **Overall Result:** All builds successful! Ready for deployment." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Overall Result:** Some builds failed. Please review the logs above." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Application Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Type:** Python Flask Web Application" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend:** Python 3.11 with Flask framework" >> $GITHUB_STEP_SUMMARY
+          echo "- **Containerization:** Docker support available" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dependencies:** Managed via requirements.txt and pyproject.toml" >> $GITHUB_STEP_SUMMARY
