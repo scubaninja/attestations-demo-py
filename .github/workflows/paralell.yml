@@ -1,6 +1,9 @@
 name: Parallel Jobs Workflow
 
-on: [push]
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   FrontEnd:
