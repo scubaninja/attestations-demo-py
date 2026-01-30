@@ -1,0 +1,137 @@
+name: Go Build and Test
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      status:
+        description: 'Build status'
+        value: ${{ jobs.go-build.outputs.status }}
+      test-results:
+        description: 'Test results'
+        value: ${{ jobs.go-build.outputs.test-results }}
+  push:
+    branches: [ main ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  go-build:
+    name: Go Build and Test
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.summary.outputs.status }}
+      test-results: ${{ steps.test.outputs.results }}
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: 🔧 Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+          
+      - name: 📦 Download dependencies
+        run: |
+          echo "📦 Downloading Go dependencies..."
+          go mod download
+          go mod verify
+          echo "   ✅ Dependencies downloaded and verified"
+          
+      - name: 🔍 Run linting
+        continue-on-error: true
+        run: |
+          echo "🔍 Running Go linting..."
+          
+          # Install golangci-lint
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
+          
+          # Run linter
+          $(go env GOPATH)/bin/golangci-lint run --timeout=5m || echo "Linting completed with warnings"
+          
+          echo "   ✅ Linting completed"
+          
+      - name: 🧪 Run tests
+        id: test
+        run: |
+          echo "🧪 Running Go tests..."
+          
+          # Run tests with coverage
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          
+          # Display coverage
+          go tool cover -func=coverage.out
+          
+          echo "   ✅ Tests completed"
+          echo "results=All tests passed ✅" >> $GITHUB_OUTPUT
+          
+      - name: 📊 Upload coverage
+        uses: codecov/codecov-action@v3
+        continue-on-error: true
+        with:
+          file: ./coverage.out
+          flags: unittests
+          
+      - name: 🏗️ Build application
+        run: |
+          echo "🏗️ Building Go application..."
+          
+          # Build for linux
+          GOOS=linux GOARCH=amd64 go build -v -o bin/attestations-demo-linux-amd64 .
+          
+          # Build for current platform
+          go build -v -o bin/attestations-demo .
+          
+          echo "   ✅ Build completed"
+          ls -lh bin/
+          
+      - name: 🐳 Build Docker image
+        run: |
+          echo "🐳 Building Docker image..."
+          docker build -f Dockerfile.go -t attestations-demo:latest .
+          echo "   ✅ Docker image built successfully"
+          
+      - name: 🔒 Attest build provenance
+        if: github.event_name == 'push'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: "bin/attestations-demo*"
+          
+      - name: 📊 Generate Summary
+        id: summary
+        run: |
+          echo "## 🐹 Go Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Status:** Build completed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "🐹 **Go Version:** $(go version)" >> $GITHUB_STEP_SUMMARY
+          echo "🏗️ **Build Artifacts:** Created in bin/" >> $GITHUB_STEP_SUMMARY
+          echo "🐳 **Docker Image:** attestations-demo:latest" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Build Steps Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Dependencies downloaded and verified" >> $GITHUB_STEP_SUMMARY  
+          echo "- ✅ Code linting performed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Tests executed with coverage" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Application built for Linux" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Docker image created" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "- ✅ Build provenance attested" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 **Result:** Ready for deployment!" >> $GITHUB_STEP_SUMMARY
+          
+          echo "status=success" >> $GITHUB_OUTPUT
