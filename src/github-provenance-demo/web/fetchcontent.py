@@ -165,18 +165,28 @@ def update_readme(
     tweets = '\n'.join(get_latest_tweets(twitter_api_key, twitter_user_id))
     contributions = '\n'.join(get_github_contributions(github_username))
 
-    # Update sections only if markers exist
+    # Update sections between START and END markers
+    import re
+    
     sections = {
-        '<!-- BLOG-POST-LIST:START -->': blogs,
-        '<!-- TWITTER:START -->': tweets,
-        '<!-- GITHUB-ACTIVITY:START -->': contributions
+        'BLOG-POST-LIST': blogs,
+        'TWITTER': tweets,
+        'GITHUB-ACTIVITY': contributions
     }
     
-    for marker, new_content in sections.items():
-        if marker in content:
-            content = content.replace(marker, f'{marker}\n{new_content}')
+    for section_name, new_content in sections.items():
+        start_marker = f'<!-- {section_name}:START -->'
+        end_marker = f'<!-- {section_name}:END -->'
+        
+        # Pattern to match content between markers
+        pattern = f'{re.escape(start_marker)}.*?{re.escape(end_marker)}'
+        replacement = f'{start_marker}\n{new_content}\n{end_marker}'
+        
+        # Check if both markers exist
+        if start_marker in content and end_marker in content:
+            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
         else:
-            logger.warning(f"Marker {marker} not found in README")
+            logger.warning(f"Markers for {section_name} not found in README")
 
     try:
         with open(readme_path, 'w', encoding='utf-8') as file:

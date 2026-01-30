@@ -3,7 +3,6 @@ import time
 import psutil
 import os
 from datetime import datetime
-from collections import defaultdict
 from threading import Lock
 
 app = Flask(__name__)
@@ -16,14 +15,11 @@ class MetricsCollector:
         self.lock = Lock()
         self.request_count = 0
         self.total_response_time = 0.0
-        self.endpoint_stats = defaultdict(lambda: {
-            'count': 0,
-            'total_time': 0.0,
-            'errors': 0,
-            'status_codes': defaultdict(int)
-        })
+        self.endpoint_stats = {}  # Changed from defaultdict to regular dict
         self.start_time = datetime.now()
         self.error_count = 0
+        self.cpu_percent = 0.0  # Cache CPU percentage
+        self._last_cpu_check = time.time()
     
     def record_request(self, endpoint, response_time, status_code):
         """Record a request's metrics."""
@@ -31,9 +27,22 @@ class MetricsCollector:
             self.request_count += 1
             self.total_response_time += response_time
             
+            # Initialize endpoint stats if not exists (thread-safe)
+            if endpoint not in self.endpoint_stats:
+                self.endpoint_stats[endpoint] = {
+                    'count': 0,
+                    'total_time': 0.0,
+                    'errors': 0,
+                    'status_codes': {}
+                }
+            
             stats = self.endpoint_stats[endpoint]
             stats['count'] += 1
             stats['total_time'] += response_time
+            
+            # Track status codes
+            if status_code not in stats['status_codes']:
+                stats['status_codes'][status_code] = 0
             stats['status_codes'][status_code] += 1
             
             if status_code >= 400:
@@ -47,41 +56,61 @@ class MetricsCollector:
             avg_response_time = (self.total_response_time / self.request_count 
                                if self.request_count > 0 else 0)
             
-            # System metrics
-            process = psutil.Process(os.getpid())
-            memory_info = process.memory_info()
-            
-            endpoint_data = []
+            # Make a copy of endpoint stats to avoid holding lock too long
+            endpoint_stats_copy = {}
             for endpoint, stats in self.endpoint_stats.items():
-                avg_time = stats['total_time'] / stats['count'] if stats['count'] > 0 else 0
-                endpoint_data.append({
-                    'endpoint': endpoint,
+                endpoint_stats_copy[endpoint] = {
                     'count': stats['count'],
-                    'avg_response_time': round(avg_time * 1000, 2),  # Convert to ms
+                    'total_time': stats['total_time'],
                     'errors': stats['errors'],
-                    'error_rate': round((stats['errors'] / stats['count'] * 100) 
-                                      if stats['count'] > 0 else 0, 2),
                     'status_codes': dict(stats['status_codes'])
-                })
+                }
             
-            return {
-                'overview': {
-                    'total_requests': self.request_count,
-                    'total_errors': self.error_count,
-                    'error_rate': round((self.error_count / self.request_count * 100) 
-                                      if self.request_count > 0 else 0, 2),
-                    'avg_response_time_ms': round(avg_response_time * 1000, 2),
-                    'uptime_seconds': round(uptime, 2),
-                    'uptime_formatted': self._format_uptime(uptime)
-                },
-                'system': {
-                    'cpu_percent': psutil.cpu_percent(interval=0.1),
-                    'memory_mb': round(memory_info.rss / 1024 / 1024, 2),
-                    'memory_percent': process.memory_percent(),
-                    'threads': process.num_threads()
-                },
-                'endpoints': sorted(endpoint_data, key=lambda x: x['count'], reverse=True)
-            }
+            request_count = self.request_count
+            error_count = self.error_count
+        
+        # Release lock before doing expensive operations
+        # Update CPU percentage periodically (every 5 seconds) to avoid blocking
+        current_time = time.time()
+        if current_time - self._last_cpu_check > 5:
+            self.cpu_percent = psutil.cpu_percent(interval=0)
+            self._last_cpu_check = current_time
+        
+        # System metrics
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        
+        endpoint_data = []
+        for endpoint, stats in endpoint_stats_copy.items():
+            avg_time = stats['total_time'] / stats['count'] if stats['count'] > 0 else 0
+            endpoint_data.append({
+                'endpoint': endpoint,
+                'count': stats['count'],
+                'avg_response_time': round(avg_time * 1000, 2),  # Convert to ms
+                'errors': stats['errors'],
+                'error_rate': round((stats['errors'] / stats['count'] * 100) 
+                                  if stats['count'] > 0 else 0, 2),
+                'status_codes': stats['status_codes']
+            })
+        
+        return {
+            'overview': {
+                'total_requests': request_count,
+                'total_errors': error_count,
+                'error_rate': round((error_count / request_count * 100) 
+                                  if request_count > 0 else 0, 2),
+                'avg_response_time_ms': round(avg_response_time * 1000, 2),
+                'uptime_seconds': round(uptime, 2),
+                'uptime_formatted': self._format_uptime(uptime)
+            },
+            'system': {
+                'cpu_percent': self.cpu_percent,
+                'memory_mb': round(memory_info.rss / 1024 / 1024, 2),
+                'memory_percent': process.memory_percent(),
+                'threads': process.num_threads()
+            },
+            'endpoints': sorted(endpoint_data, key=lambda x: x['count'], reverse=True)
+        }
     
     def _format_uptime(self, seconds):
         """Format uptime in a human-readable way."""
@@ -116,7 +145,8 @@ def before_request():
 @app.after_request
 def after_request(response):
     """Record request completion and metrics."""
-    if hasattr(request, 'start_time'):
+    # Skip tracking for metrics endpoints to avoid recursive tracking
+    if hasattr(request, 'start_time') and request.endpoint not in ['metrics_dashboard', 'metrics_json']:
         response_time = time.time() - request.start_time
         endpoint = request.endpoint or 'unknown'
         metrics.record_request(endpoint, response_time, response.status_code)
@@ -141,13 +171,23 @@ def health():
 
 @app.route("/metrics/json")
 def metrics_json():
-    """Return metrics in JSON format."""
+    """
+    Return metrics in JSON format.
+    
+    Note: In production, this endpoint should be protected with authentication
+    or restricted by IP whitelist to prevent exposing system information.
+    """
     return jsonify(metrics.get_metrics())
 
 
 @app.route("/metrics")
 def metrics_dashboard():
-    """Display metrics dashboard."""
+    """
+    Display metrics dashboard.
+    
+    Note: In production, this endpoint should be protected with authentication
+    or restricted by IP whitelist to prevent exposing system information.
+    """
     metrics_data = metrics.get_metrics()
     
     # HTML template for the dashboard
