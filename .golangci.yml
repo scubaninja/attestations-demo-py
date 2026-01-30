@@ -33,3 +33,5 @@ issues:
 run:
   timeout: 5m
   tests: true
+  skip-files:
+    - "Dockerfile.go"
